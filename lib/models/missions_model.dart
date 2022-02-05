@@ -1,15 +1,15 @@
-import 'package:flutter/cupertino.dart';
+import 'dart:async';
+
 import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:space_x_launches/models/mission.dart';
 
 class MissionsModel {
-  int missionsPerPage = 10;
-  int currentOffset = 0;
-  String searchQuery = "";
+  final missionsPerPage = 10;
 
-  final graphQlClient = ValueNotifier(GraphQLClient(
+  final GraphQLClient graphQlClient = GraphQLClient(
     link: HttpLink('https://api.spacex.land/graphql'),
     cache: GraphQLCache(),
-  ));
+  );
 
   String readMissions = """
   query ReadMissions(\$searchQuery: String!, \$missionsPerPage: Int!, \$offset: Int!) {
@@ -24,4 +24,40 @@ class MissionsModel {
     }
   }
   """;
+
+  StreamSubscription? _loadMissionsSubscription;
+
+  // bool get loadMissionsInProgress => _loadMissionsSubscription != null;
+
+  Future<List<Mission>> loadMissions(String query, int offset) async {
+    cancelLoadMissions();
+    var completer = Completer<List<Mission>>();
+    var options = QueryOptions(
+      document: gql(readMissions),
+      variables: {
+        'searchQuery': query,
+        'missionsPerPage': missionsPerPage,
+        'offset': offset,
+      },
+    ).asWatchQueryOptions();
+    var observableQuery = graphQlClient.watchQuery(options);
+    _loadMissionsSubscription = observableQuery.stream.listen((event) {
+      var data = event.data;
+      if (data != null) {
+        final List launchesRaw = data['launches'];
+        final missions = List<Mission>.from(
+            launchesRaw.map((value) => Mission.fromJson(value)));
+        cancelLoadMissions();
+        completer.complete(missions);
+      }
+    }, onError: (object) {
+      completer.completeError(object);
+    });
+    return completer.future;
+  }
+
+  cancelLoadMissions() {
+    _loadMissionsSubscription?.cancel();
+    _loadMissionsSubscription = null;
+  }
 }

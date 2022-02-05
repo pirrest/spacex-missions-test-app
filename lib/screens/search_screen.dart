@@ -1,7 +1,7 @@
-import 'dart:ui';
+import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:space_x_launches/i18n.dart';
 import 'package:space_x_launches/models/mission.dart';
@@ -20,124 +20,212 @@ class _SearchScreenState extends State<SearchScreen> {
   late ScrollController _resultsListScrollController;
   final _inputKey = const ValueKey("input");
   final _animationDuration = const Duration(milliseconds: 300);
-
-  String _query = "";
+  late MissionsModel _missionsModel;
+  Set<Mission> _missions = {};
+  int _offset = 0;
+  bool _lastPageReached = false;
+  Timer? _searchTimer;
+  Future<List<Mission>>? _searchFuture;
 
   _resultsListScrollControllerHandler() {
-    print("_resultsListScrollController: ${_resultsListScrollController.offset}");
+    if (!_lastPageReached &&
+        _resultsListScrollController.offset >=
+            _resultsListScrollController.position.maxScrollExtent) {
+      setState(() {
+        _offset += _missionsModel.missionsPerPage;
+      });
+    }
+  }
+
+  _resetSearch() {
+    setState(() {
+      _offset = 0;
+      _textEditingController.text = "";
+      _lastPageReached = false;
+      _missions = {};
+      _resultsVisible = false;
+      _missionsModel.cancelLoadMissions();
+    });
+  }
+
+  _stopSearch() {
+    setState(() {
+      _missionsModel.cancelLoadMissions();
+    });
+  }
+
+  final _inputFocusNode = FocusNode();
+
+  _gainFocus() {
+    if (!_inputFocusNode.hasFocus && _inputFocusNode.canRequestFocus) {
+      _inputFocusNode.requestFocus();
+    }
+  }
+
+  _releaseFocus() {
+    if(_inputFocusNode.hasFocus) {
+      _inputFocusNode.unfocus();
+    }
   }
 
   @override
   void initState() {
     super.initState();
-    _textEditingController = TextEditingController(text: _query);
+    _textEditingController = TextEditingController(text: "");
     _resultsListScrollController = ScrollController();
-    _resultsListScrollController.addListener(_resultsListScrollControllerHandler);
+    _resultsListScrollController
+        .addListener(_resultsListScrollControllerHandler);
   }
 
   @override
   void dispose() {
     _textEditingController.dispose();
-    _resultsListScrollController.removeListener(_resultsListScrollControllerHandler);
+    _resultsListScrollController
+        .removeListener(_resultsListScrollControllerHandler);
     _resultsListScrollController.dispose();
+    _removeSearchTimer();
+    _inputFocusNode.dispose();
     super.dispose();
   }
 
   _searchFiledChanged(String newValue) {
     setState(() {
-      _query = _textEditingController.text;
-      if (_query.length > 3) {
-        _resultsVisible = true;
-        _performSearch();
+      /*if (_query.length > 3) {
+        _tryToSearch();
       } else {
         _resultsVisible = false;
-      }
+      }*/
     });
   }
 
-  _performSearch() {}
+  _tryToSearch() {
+    _searchTimer = Timer(const Duration(seconds: 1), _search);
+  }
+
+  _search() {
+    _removeSearchTimer();
+    setState(() {
+      _missions.clear();
+      _searchFuture =
+          _missionsModel.loadMissions(_textEditingController.text, _offset);
+      _resultsVisible = true;
+    });
+  }
+
+  void _removeSearchTimer() {
+    _searchTimer?.cancel();
+    _searchTimer = null;
+  }
 
   @override
   Widget build(BuildContext context) {
-    var missionsModel = Provider.of<MissionsModel>(context);
+    _missionsModel = Provider.of<MissionsModel>(context);
+    const inputHeight = 50.0;
     return Scaffold(
-      body: Center(
+      body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(15.0),
-          child: Column(
+          padding: const EdgeInsets.symmetric(horizontal: 15.0),
+          child: Stack(
             children: [
-              if (!_resultsVisible) Expanded(child: AnimatedContainer(duration: _animationDuration,)),
-              AnimatedContainer(
+              if (_resultsVisible)
+                GestureDetector(
+                  onTapDown: (details) => _releaseFocus(),
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: inputHeight),
+                    child: FutureBuilder<List<Mission>>(
+                      future: _searchFuture,
+                      builder: (context, snapshot) {
+                        print(
+                            "snapshot.hasData: ${snapshot.hasData}, ${snapshot.connectionState}");
+
+                        if (snapshot.hasError) {
+                          return Center(
+                              child: Text(snapshot.error!.toString()));
+                        }
+
+                        if (!snapshot.hasData ||
+                            (snapshot.connectionState ==
+                                    ConnectionState.waiting &&
+                                _missions.isEmpty)) {
+                          return const Center(
+                              child: CircularProgressIndicator.adaptive());
+                        }
+
+                        var newMissions = snapshot.data!;
+                        if (newMissions.length <
+                            _missionsModel.missionsPerPage) {
+                          _lastPageReached = true;
+                        }
+                        _missions.addAll(newMissions);
+                        var missionsToShow = _missions.toList();
+                        print("missionsToShow: ${missionsToShow.length}");
+                        if (missionsToShow.isEmpty) {
+                          return Center(child: Text('Nothing found'.i18n));
+                        }
+                        return ListView.builder(
+                            controller: _resultsListScrollController,
+                            itemCount: missionsToShow.length,
+                            itemBuilder: (context, index) {
+                              return ListTile(
+                                title: Text(missionsToShow[index].name),
+                                subtitle: Text(missionsToShow[index].details),
+                              );
+                            });
+                      },
+                    ),
+                  ),
+                ),
+              AnimatedAlign(
+                curve: Curves.easeInOut,
                 duration: _animationDuration,
-                key: _inputKey,
-                decoration: BoxDecoration(
-                    color: Theme.of(context).backgroundColor,
-                    borderRadius: const BorderRadius.all(Radius.circular(20)),
-                    border: Border.all(color: Theme.of(context).primaryColor)),
-                child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 15.0),
-                          child: TextField(
-                            controller: _textEditingController,
-                            decoration: InputDecoration(
-                              contentPadding: const EdgeInsets.all(0.0),
-                              border: InputBorder.none,
-                              hintText: "Start here".i18n,
-                              // labelText: "Search".i18n,
+                alignment:
+                    _resultsVisible ? Alignment.topCenter : Alignment.center,
+                child: Container(
+                  height: inputHeight,
+                  key: _inputKey,
+                  decoration: BoxDecoration(
+                      color: Theme.of(context).backgroundColor,
+                      borderRadius: const BorderRadius.all(Radius.circular(20)),
+                      border:
+                          Border.all(color: Theme.of(context).primaryColor)),
+                  child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 15.0),
+                            child: TextField(
+                              focusNode: _inputFocusNode,
+                              onEditingComplete: () {
+                                _releaseFocus();
+                                _search();
+                              },
+                              keyboardType: TextInputType.text,
+                              textInputAction: TextInputAction.search,
+                              controller: _textEditingController,
+                              decoration: InputDecoration(
+                                // contentPadding: const EdgeInsets.all(0.0),
+                                border: InputBorder.none,
+                                hintText: "Start here".i18n,
+                              ),
+                              onChanged: (value) => _searchFiledChanged(value),
                             ),
-                            onChanged: (value) => _searchFiledChanged(value),
                           ),
                         ),
-                      ),
-                      IconButton(
-                          onPressed: _performSearch,
-                          icon: const Icon(Icons.search))
-                    ]),
+                        if (_textEditingController.text.isNotEmpty)
+                          IconButton(
+                              onPressed: () {
+                                _resetSearch();
+                                _gainFocus();
+                              },
+                              icon: const Icon(Icons.cancel)),
+                        if (_textEditingController.text.isEmpty)
+                        const IconButton(
+                            onPressed: null,
+                            icon: Icon(Icons.search))
+                      ]),
+                ),
               ),
-              if (!_resultsVisible) const Spacer(),
-              if (_resultsVisible) Expanded(child:
-                  Query(
-                    options: QueryOptions(
-                      document: gql(missionsModel.readMissions),
-                      variables: {
-                        'searchQuery': _query,
-                        'missionsPerPage': missionsModel.missionsPerPage,
-                        'offset': missionsModel.currentOffset,
-                      },
-                      // pollInterval: const Duration(seconds: 10),
-                    ),
-                    builder: (result, {fetchMore, refetch}) {
-                      if (result.hasException) {
-                        return Center(child: Text(result.exception.toString()));
-                      }
-                      if (result.isLoading) {
-                        return Center(child: Text('Loading'.i18n));
-                      }
-
-                      List launchesRaw = result.data!['launches'];
-
-                      if(launchesRaw.isEmpty) {
-                        return Center(child: Text('Nothing found'.i18n));
-                      }
-
-                      final missions = List<Mission>.from(launchesRaw.map((value) => Mission.fromJson(value)));
-                      final missionsCount = missions.length;
-
-                      return ListView.builder(
-                        controller: _resultsListScrollController,
-                          itemCount: missionsCount,
-                          itemBuilder: (context, index) {
-                            return ListTile(
-                              title: Text(missions[index].name),
-                              subtitle: Text(missions[index].details),
-                            );
-                          });
-                    },
-                  )
-              )
             ],
           ),
         ),

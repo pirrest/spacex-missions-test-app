@@ -17,25 +17,22 @@ class MyApp extends StatelessWidget {
     var missionsModel = MissionsModel();
     return Provider<MissionsModel>(
       create: (context) => missionsModel,
-      child: GraphQLProvider(
-        client: missionsModel.graphQlClient,
-        child: MaterialApp(
-          title: 'Flutter Demo',
-          theme: ThemeData.light(),
-          darkTheme: ThemeData.dark(),
-          themeMode: ThemeMode.system,
-          localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          supportedLocales: const [
-            Locale('en', ""),
-            Locale('ru', ""),
-            Locale('uk', ""),
-          ],
-          home: const SearchScreen(),
-        ),
+      child: MaterialApp(
+        title: 'Flutter Demo',
+        theme: ThemeData.light(),
+        darkTheme: ThemeData.dark(),
+        themeMode: ThemeMode.system,
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [
+          Locale('en', ""),
+          Locale('ru', ""),
+          Locale('uk', ""),
+        ],
+        home: const SearchScreen(),
       ),
     );
   }
