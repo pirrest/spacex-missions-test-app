@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:provider/provider.dart';
 import 'package:space_x_launches/i18n.dart';
 import 'package:space_x_launches/models/mission.dart';
@@ -16,58 +17,40 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   bool _resultsVisible = false;
   late TextEditingController _textEditingController;
-  late ScrollController _resultsListScrollController;
   final _inputKey = const ValueKey("input");
   final _animationDuration = const Duration(milliseconds: 300);
   late MissionsModel _missionsModel;
-  Set<Mission> _missions = {};
-  int _page = 0;
-  int _nextPage = 0;
   Timer? _searchTimer;
-  Future<List<Mission>>? _searchFuture;
   final _inputFocusNode = FocusNode();
+
   String get _trimmedQuery => _textEditingController.text.trim();
+  final PagingController<int, Mission> _pagingController =
+      PagingController(firstPageKey: 0);
 
   @override
   void initState() {
     super.initState();
     _textEditingController = TextEditingController(text: "");
-    _resultsListScrollController = ScrollController();
-    _resultsListScrollController
-        .addListener(_resultsListScrollControllerHandler);
+    _pagingController.addPageRequestListener((pageKey) {
+      _fetchPage(pageKey);
+    });
   }
 
   @override
   void dispose() {
-    _textEditingController.dispose();
-    _resultsListScrollController
-        .removeListener(_resultsListScrollControllerHandler);
-    _resultsListScrollController.dispose();
     _removeSearchTimer();
+    _textEditingController.dispose();
     _inputFocusNode.dispose();
+    _pagingController.dispose();
     super.dispose();
-  }
-
-  _resultsListScrollControllerHandler() {
-    if (_nextPage > _page &&
-        _resultsListScrollController.offset >=
-            _resultsListScrollController.position.maxScrollExtent) {
-      print("_nextPage: $_nextPage, _page: $_page");
-      setState(() {
-        _page = _nextPage;
-        _search(keepLastResult: true);
-      });
-    }
   }
 
   _resetSearch({bool keepQuery = false}) {
     setState(() {
-      if(!keepQuery) {
+      if (!keepQuery) {
         _textEditingController.text = "";
       }
-      _page = 0;
-      _nextPage = 0;
-      _missions = {};
+      _pagingController.refresh();
       _resultsVisible = false;
       _removeSearchTimer();
       _missionsModel.cancelLoadMissions();
@@ -81,7 +64,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   _releaseFocus() {
-    if(_inputFocusNode.hasFocus) {
+    if (_inputFocusNode.hasFocus) {
       _inputFocusNode.unfocus();
     }
   }
@@ -98,16 +81,29 @@ class _SearchScreenState extends State<SearchScreen> {
     });
   }
 
-  _search({bool keepLastResult = false}) {
+  _search() {
     _removeSearchTimer();
     setState(() {
-      if(!keepLastResult) {
-        _missions.clear();
-      }
-      _searchFuture =
-          _missionsModel.loadMissions(_trimmedQuery, _page*_missionsModel.missionsPerPage);
-      _resultsVisible = true;
+      _pagingController.refresh();
+      _fetchPage(0);
     });
+  }
+
+  Future<void> _fetchPage(int pageKey) async {
+    try {
+      _resultsVisible = true;
+      final newMissions =
+          await _missionsModel.loadMissions(_trimmedQuery, pageKey);
+      final isLastPage = newMissions.length < _missionsModel.missionsPerPage;
+      if (isLastPage) {
+        _pagingController.appendLastPage(newMissions);
+      } else {
+        final nextPageKey = pageKey + newMissions.length;
+        _pagingController.appendPage(newMissions, nextPageKey);
+      }
+    } catch (error) {
+      _pagingController.error = error;
+    }
   }
 
   void _removeSearchTimer() {
@@ -130,58 +126,40 @@ class _SearchScreenState extends State<SearchScreen> {
                   onTapDown: (details) => _releaseFocus(),
                   child: Padding(
                     padding: const EdgeInsets.only(top: inputHeight),
-                    child: FutureBuilder<List<Mission>>(
-                      future: _searchFuture,
-                      builder: (context, snapshot) {
-
-                        if (snapshot.hasError) {
-                          return Center(
-                              child: Text(snapshot.error!.toString()));
-                        }
-
-                        if (!snapshot.hasData ||
-                            (snapshot.connectionState ==
-                                    ConnectionState.waiting &&
-                                _missions.isEmpty)) {
-                          return const Center(
-                              child: CircularProgressIndicator.adaptive());
-                        }
-
-                        var newMissions = snapshot.data!;
-                        if (newMissions.length <
-                            _missionsModel.missionsPerPage) {
-                          _nextPage = -1;
-                        } else {
-                          _nextPage++;
-                        }
-                        _missions.addAll(newMissions);
-                        var missionsToShow = _missions.toList();
-                        print("missionsToShow: ${missionsToShow.length}");
-                        if (missionsToShow.isEmpty) {
-                          return Center(child: Text('Nothing found'.i18n));
-                        }
-                        return ListView.builder(
-                            controller: _resultsListScrollController,
-                            itemCount: missionsToShow.length,
-                            itemBuilder: (context, index) {
-                              var mission = missionsToShow[index];
-                              return ListTile(
-                                title: Text(mission.name),
-                                subtitle: Text(mission.details),
-                              );
-                            });
-                      },
+                    child: PagedListView<int, Mission>(
+                      pagingController: _pagingController,
+                      builderDelegate: PagedChildBuilderDelegate<Mission>(
+                        itemBuilder: (context, mission, index) {
+                          return ListTile(
+                            title: Text(mission.name),
+                            subtitle: Text(mission.details),
+                          );
+                        },
+                        firstPageProgressIndicatorBuilder: (context) =>
+                            const CircularProgressIndicator.adaptive(),
+                        newPageProgressIndicatorBuilder: (context) =>
+                            const CircularProgressIndicator.adaptive(),
+                        noItemsFoundIndicatorBuilder: (context) => Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Column(
+                            children: [
+                              Text("Nothing found".i18n, style:Theme.of(context).textTheme.headline6),
+                              Text('Try "star"'.i18n, style:Theme.of(context).textTheme.caption)
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               AnimatedAlign(
+                key: _inputKey,
                 curve: Curves.easeInOut,
                 duration: _animationDuration,
                 alignment:
                     _resultsVisible ? Alignment.topCenter : Alignment.center,
                 child: Container(
                   height: inputHeight,
-                  key: _inputKey,
                   decoration: BoxDecoration(
                       color: Theme.of(context).backgroundColor,
                       borderRadius: const BorderRadius.all(Radius.circular(20)),
@@ -219,9 +197,8 @@ class _SearchScreenState extends State<SearchScreen> {
                               },
                               icon: const Icon(Icons.cancel)),
                         if (_trimmedQuery.isEmpty)
-                        const IconButton(
-                            onPressed: null,
-                            icon: Icon(Icons.search))
+                          const IconButton(
+                              onPressed: null, icon: Icon(Icons.search))
                       ]),
                 ),
               ),

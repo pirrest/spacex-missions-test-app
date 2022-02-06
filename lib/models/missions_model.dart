@@ -13,7 +13,7 @@ class MissionsModel {
 
   String readMissions = """
   query ReadMissions(\$searchQuery: String!, \$missionsPerPage: Int!, \$offset: Int!) {
-    launches(find: {mission_name: \$searchQuery}, limit: \$missionsPerPage, sort: "launch_date_unix", offset:\$offset ) {
+    launches(find: {mission_name: \$searchQuery}, limit: \$missionsPerPage, offset:\$offset ) {
       id
       details
       mission_name
@@ -23,15 +23,12 @@ class MissionsModel {
 
   StreamSubscription? _loadMissionsSubscription;
 
-  // bool get loadMissionsInProgress => _loadMissionsSubscription != null;
-
   Future<List<Mission>> loadMissions(String query, int offset) async {
-    print("offset: $offset");
     cancelLoadMissions();
     var completer = Completer<List<Mission>>();
     var options = QueryOptions(
       document: gql(readMissions),
-      fetchPolicy: FetchPolicy.noCache,
+      // fetchPolicy: FetchPolicy.noCache,
       variables: {
         'searchQuery': query,
         'missionsPerPage': missionsPerPage,
