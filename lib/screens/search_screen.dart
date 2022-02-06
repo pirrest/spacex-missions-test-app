@@ -53,7 +53,6 @@ class _SearchScreenState extends State<SearchScreen> {
       _pagingController.refresh();
       _resultsVisible = false;
       _removeSearchTimer();
-      _missionsModel.cancelLoadMissions();
     });
   }
 
@@ -72,7 +71,6 @@ class _SearchScreenState extends State<SearchScreen> {
   _searchFiledChanged(String newValue) {
     setState(() {
       if (_trimmedQuery.length > 3) {
-        _missionsModel.cancelLoadMissions();
         _removeSearchTimer();
         _searchTimer = Timer(const Duration(seconds: 1), _search);
       } else {
@@ -90,6 +88,10 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _fetchPage(int pageKey) async {
+    if(_trimmedQuery.isEmpty) {
+      _resultsVisible = false;
+      return;
+    }
     try {
       _resultsVisible = true;
       final newMissions =

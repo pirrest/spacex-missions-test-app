@@ -24,35 +24,24 @@ class MissionsModel {
   StreamSubscription? _loadMissionsSubscription;
 
   Future<List<Mission>> loadMissions(String query, int offset) async {
-    cancelLoadMissions();
     var completer = Completer<List<Mission>>();
     var options = QueryOptions(
       document: gql(readMissions),
-      // fetchPolicy: FetchPolicy.noCache,
       variables: {
         'searchQuery': query,
         'missionsPerPage': missionsPerPage,
         'offset': offset,
       },
-    ).asWatchQueryOptions();
-    var observableQuery = graphQlClient.watchQuery(options);
-    _loadMissionsSubscription = observableQuery.stream.listen((event) {
-      var data = observableQuery.latestResult?.data;
+    );
+    graphQlClient.query(options).then((value) {
+      var data = value.data;
       if (data != null) {
         final List launchesRaw = data['launches'];
         final missions = List<Mission>.from(
             launchesRaw.map((value) => Mission.fromJson(value)));
-        cancelLoadMissions();
         completer.complete(missions);
       }
-    }, onError: (object) {
-      completer.completeError(object);
     });
     return completer.future;
-  }
-
-  cancelLoadMissions() {
-    _loadMissionsSubscription?.cancel();
-    _loadMissionsSubscription = null;
   }
 }
