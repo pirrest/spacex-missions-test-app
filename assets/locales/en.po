@@ -1,0 +1,33 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"POT-Creation-Date: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 2.3\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: lib/models/mission.dart:7
+msgid "No details"
+msgstr "No details"
+
+#: lib/screens/search_screen.dart:75
+msgid "Search query should contain more than 3 characters"
+msgstr "Search query should contain more than 3 characters"
+
+#: lib/screens/search_screen.dart:151
+msgid "Nothing found"
+msgstr "Nothing found"
+
+#: lib/screens/search_screen.dart:152
+msgid "Try \"star\""
+msgstr "Try \"star\""
+
+#: lib/screens/search_screen.dart:191
+msgid "Search for SpaceX missions"
+msgstr "Search for SpaceX missions"

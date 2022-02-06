@@ -16,41 +16,21 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   bool _resultsVisible = false;
-  late TextEditingController _textEditingController;
   final _inputKey = const ValueKey("input");
   final _animationDuration = const Duration(milliseconds: 300);
   late MissionsModel _missionsModel;
   Timer? _searchTimer;
   final _inputFocusNode = FocusNode();
+  final _textEditingController = TextEditingController(text: "");
+  final _pagingController = PagingController<int, Mission>(firstPageKey: 0);
 
-  String get _trimmedQuery => _textEditingController.text.trim();
-  final PagingController<int, Mission> _pagingController =
-      PagingController(firstPageKey: 0);
-
-  @override
-  void initState() {
-    super.initState();
-    _textEditingController = TextEditingController(text: "");
-    _pagingController.addPageRequestListener((pageKey) {
-      _fetchPage(pageKey);
-    });
-  }
-
-  @override
-  void dispose() {
-    _removeSearchTimer();
-    _textEditingController.dispose();
-    _inputFocusNode.dispose();
-    _pagingController.dispose();
-    super.dispose();
-  }
+  get _trimmedQuery => _textEditingController.text.trim();
 
   _resetSearch({bool keepQuery = false}) {
     setState(() {
       if (!keepQuery) {
         _textEditingController.text = "";
       }
-      _pagingController.refresh();
       _resultsVisible = false;
       _removeSearchTimer();
     });
@@ -68,7 +48,7 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
-  _searchFiledChanged(String newValue) {
+  _searchFieldChanged(String newValue) {
     setState(() {
       if (_trimmedQuery.length > 3) {
         _removeSearchTimer();
@@ -87,9 +67,13 @@ class _SearchScreenState extends State<SearchScreen> {
     });
   }
 
-  Future<void> _fetchPage(int pageKey) async {
-    if(_trimmedQuery.isEmpty) {
+  _fetchPage(int pageKey) async {
+    if (_trimmedQuery.length <= 3) {
       _resultsVisible = false;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:
+            Text("Search query should contain more than 3 characters".i18n),
+      ));
       return;
     }
     try {
@@ -114,6 +98,23 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _pagingController.addPageRequestListener((pageKey) {
+      _fetchPage(pageKey);
+    });
+  }
+
+  @override
+  void dispose() {
+    _removeSearchTimer();
+    _inputFocusNode.dispose();
+    _textEditingController.dispose();
+    _pagingController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     _missionsModel = Provider.of<MissionsModel>(context);
     const inputHeight = 50.0;
@@ -131,6 +132,8 @@ class _SearchScreenState extends State<SearchScreen> {
                     child: PagedListView<int, Mission>(
                       pagingController: _pagingController,
                       builderDelegate: PagedChildBuilderDelegate<Mission>(
+                        animateTransitions: true,
+                        transitionDuration: _animationDuration,
                         itemBuilder: (context, mission, index) {
                           return ListTile(
                             title: Text(mission.name),
@@ -145,8 +148,10 @@ class _SearchScreenState extends State<SearchScreen> {
                           padding: const EdgeInsets.all(8.0),
                           child: Column(
                             children: [
-                              Text("Nothing found".i18n, style:Theme.of(context).textTheme.headline6),
-                              Text('Try "star"'.i18n, style:Theme.of(context).textTheme.caption)
+                              Text("Nothing found".i18n,
+                                  style: Theme.of(context).textTheme.headline6),
+                              Text('Try "star"'.i18n,
+                                  style: Theme.of(context).textTheme.caption)
                             ],
                           ),
                         ),
@@ -183,11 +188,10 @@ class _SearchScreenState extends State<SearchScreen> {
                               textInputAction: TextInputAction.search,
                               controller: _textEditingController,
                               decoration: InputDecoration(
-                                // contentPadding: const EdgeInsets.all(0.0),
                                 border: InputBorder.none,
                                 hintText: "Search for SpaceX missions".i18n,
                               ),
-                              onChanged: (value) => _searchFiledChanged(value),
+                              onChanged: (value) => _searchFieldChanged(value),
                             ),
                           ),
                         ),

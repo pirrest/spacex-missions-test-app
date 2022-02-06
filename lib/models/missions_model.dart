@@ -6,12 +6,12 @@ import 'package:space_x_launches/models/mission.dart';
 class MissionsModel {
   final missionsPerPage = 10;
 
-  final GraphQLClient graphQlClient = GraphQLClient(
+  final GraphQLClient _graphQlClient = GraphQLClient(
     link: HttpLink('https://api.spacex.land/graphql'),
     cache: GraphQLCache(),
   );
 
-  String readMissions = """
+  final String _readMissions = """
   query ReadMissions(\$searchQuery: String!, \$missionsPerPage: Int!, \$offset: Int!) {
     launches(find: {mission_name: \$searchQuery}, limit: \$missionsPerPage, offset:\$offset ) {
       id
@@ -21,19 +21,17 @@ class MissionsModel {
   }
   """;
 
-  StreamSubscription? _loadMissionsSubscription;
-
   Future<List<Mission>> loadMissions(String query, int offset) async {
     var completer = Completer<List<Mission>>();
     var options = QueryOptions(
-      document: gql(readMissions),
+      document: gql(_readMissions),
       variables: {
         'searchQuery': query,
         'missionsPerPage': missionsPerPage,
         'offset': offset,
       },
     );
-    graphQlClient.query(options).then((value) {
+    _graphQlClient.query(options).then((value) {
       var data = value.data;
       if (data != null) {
         final List launchesRaw = data['launches'];

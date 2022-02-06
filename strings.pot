@@ -1,0 +1,19 @@
+#: ./lib/models/mission.dart:7
+msgid "No details"
+msgstr ""
+
+#: ./lib/screens/search_screen.dart:75
+msgid "Search query should contain more than 3 characters"
+msgstr ""
+
+#: ./lib/screens/search_screen.dart:151
+msgid "Nothing found"
+msgstr ""
+
+#: ./lib/screens/search_screen.dart:152
+msgid "Try \"star\""
+msgstr ""
+
+#: ./lib/screens/search_screen.dart:191
+msgid "Search for SpaceX missions"
+msgstr ""
