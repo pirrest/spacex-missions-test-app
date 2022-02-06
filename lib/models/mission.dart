@@ -4,14 +4,10 @@ class Mission {
   Mission.fromJson(Map<String, dynamic> json)
       : id = int.parse(json['id']),
         name = json['mission_name'],
-        details = json['details'] ?? 'No details'.i18n,
-        ships = [
-          for (var shipRaw in json['ships']) MissionShip.fromJson(shipRaw)
-        ];
+        details = json['details'] ?? 'No details'.i18n;
   final int id;
   final String name;
   final String details;
-  final List<MissionShip> ships;
 
   @override
   bool operator ==(Object other) =>
@@ -20,12 +16,4 @@ class Mission {
 
   @override
   int get hashCode => id.hashCode;
-}
-
-class MissionShip {
-  MissionShip.fromJson(Map<String, dynamic> json)
-      : name = json['name'],
-        image = json['image'];
-  final String name;
-  final String? image;
 }

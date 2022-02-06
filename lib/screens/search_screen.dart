@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:space_x_launches/i18n.dart';
@@ -22,51 +21,12 @@ class _SearchScreenState extends State<SearchScreen> {
   final _animationDuration = const Duration(milliseconds: 300);
   late MissionsModel _missionsModel;
   Set<Mission> _missions = {};
-  int _offset = 0;
-  bool _lastPageReached = false;
+  int _page = 0;
+  int _nextPage = 0;
   Timer? _searchTimer;
   Future<List<Mission>>? _searchFuture;
-
-  _resultsListScrollControllerHandler() {
-    if (!_lastPageReached &&
-        _resultsListScrollController.offset >=
-            _resultsListScrollController.position.maxScrollExtent) {
-      setState(() {
-        _offset += _missionsModel.missionsPerPage;
-      });
-    }
-  }
-
-  _resetSearch() {
-    setState(() {
-      _offset = 0;
-      _textEditingController.text = "";
-      _lastPageReached = false;
-      _missions = {};
-      _resultsVisible = false;
-      _missionsModel.cancelLoadMissions();
-    });
-  }
-
-  _stopSearch() {
-    setState(() {
-      _missionsModel.cancelLoadMissions();
-    });
-  }
-
   final _inputFocusNode = FocusNode();
-
-  _gainFocus() {
-    if (!_inputFocusNode.hasFocus && _inputFocusNode.canRequestFocus) {
-      _inputFocusNode.requestFocus();
-    }
-  }
-
-  _releaseFocus() {
-    if(_inputFocusNode.hasFocus) {
-      _inputFocusNode.unfocus();
-    }
-  }
+  String get _trimmedQuery => _textEditingController.text.trim();
 
   @override
   void initState() {
@@ -88,26 +48,64 @@ class _SearchScreenState extends State<SearchScreen> {
     super.dispose();
   }
 
-  _searchFiledChanged(String newValue) {
+  _resultsListScrollControllerHandler() {
+    if (_nextPage > _page &&
+        _resultsListScrollController.offset >=
+            _resultsListScrollController.position.maxScrollExtent) {
+      print("_nextPage: $_nextPage, _page: $_page");
+      setState(() {
+        _page = _nextPage;
+        _search(keepLastResult: true);
+      });
+    }
+  }
+
+  _resetSearch({bool keepQuery = false}) {
     setState(() {
-      /*if (_query.length > 3) {
-        _tryToSearch();
-      } else {
-        _resultsVisible = false;
-      }*/
+      if(!keepQuery) {
+        _textEditingController.text = "";
+      }
+      _page = 0;
+      _nextPage = 0;
+      _missions = {};
+      _resultsVisible = false;
+      _removeSearchTimer();
+      _missionsModel.cancelLoadMissions();
     });
   }
 
-  _tryToSearch() {
-    _searchTimer = Timer(const Duration(seconds: 1), _search);
+  _gainFocus() {
+    if (!_inputFocusNode.hasFocus && _inputFocusNode.canRequestFocus) {
+      _inputFocusNode.requestFocus();
+    }
   }
 
-  _search() {
+  _releaseFocus() {
+    if(_inputFocusNode.hasFocus) {
+      _inputFocusNode.unfocus();
+    }
+  }
+
+  _searchFiledChanged(String newValue) {
+    setState(() {
+      if (_trimmedQuery.length > 3) {
+        _missionsModel.cancelLoadMissions();
+        _removeSearchTimer();
+        _searchTimer = Timer(const Duration(seconds: 1), _search);
+      } else {
+        _resetSearch(keepQuery: true);
+      }
+    });
+  }
+
+  _search({bool keepLastResult = false}) {
     _removeSearchTimer();
     setState(() {
-      _missions.clear();
+      if(!keepLastResult) {
+        _missions.clear();
+      }
       _searchFuture =
-          _missionsModel.loadMissions(_textEditingController.text, _offset);
+          _missionsModel.loadMissions(_trimmedQuery, _page*_missionsModel.missionsPerPage);
       _resultsVisible = true;
     });
   }
@@ -124,7 +122,7 @@ class _SearchScreenState extends State<SearchScreen> {
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 15.0),
+          padding: const EdgeInsets.only(top: 15.0, left: 15.0, right: 15.0),
           child: Stack(
             children: [
               if (_resultsVisible)
@@ -135,8 +133,6 @@ class _SearchScreenState extends State<SearchScreen> {
                     child: FutureBuilder<List<Mission>>(
                       future: _searchFuture,
                       builder: (context, snapshot) {
-                        print(
-                            "snapshot.hasData: ${snapshot.hasData}, ${snapshot.connectionState}");
 
                         if (snapshot.hasError) {
                           return Center(
@@ -154,7 +150,9 @@ class _SearchScreenState extends State<SearchScreen> {
                         var newMissions = snapshot.data!;
                         if (newMissions.length <
                             _missionsModel.missionsPerPage) {
-                          _lastPageReached = true;
+                          _nextPage = -1;
+                        } else {
+                          _nextPage++;
                         }
                         _missions.addAll(newMissions);
                         var missionsToShow = _missions.toList();
@@ -166,9 +164,10 @@ class _SearchScreenState extends State<SearchScreen> {
                             controller: _resultsListScrollController,
                             itemCount: missionsToShow.length,
                             itemBuilder: (context, index) {
+                              var mission = missionsToShow[index];
                               return ListTile(
-                                title: Text(missionsToShow[index].name),
-                                subtitle: Text(missionsToShow[index].details),
+                                title: Text(mission.name),
+                                subtitle: Text(mission.details),
                               );
                             });
                       },
@@ -206,20 +205,20 @@ class _SearchScreenState extends State<SearchScreen> {
                               decoration: InputDecoration(
                                 // contentPadding: const EdgeInsets.all(0.0),
                                 border: InputBorder.none,
-                                hintText: "Start here".i18n,
+                                hintText: "Search for SpaceX missions".i18n,
                               ),
                               onChanged: (value) => _searchFiledChanged(value),
                             ),
                           ),
                         ),
-                        if (_textEditingController.text.isNotEmpty)
+                        if (_trimmedQuery.isNotEmpty)
                           IconButton(
                               onPressed: () {
                                 _resetSearch();
                                 _gainFocus();
                               },
                               icon: const Icon(Icons.cancel)),
-                        if (_textEditingController.text.isEmpty)
+                        if (_trimmedQuery.isEmpty)
                         const IconButton(
                             onPressed: null,
                             icon: Icon(Icons.search))

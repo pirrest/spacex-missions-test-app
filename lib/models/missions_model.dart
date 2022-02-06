@@ -14,13 +14,9 @@ class MissionsModel {
   String readMissions = """
   query ReadMissions(\$searchQuery: String!, \$missionsPerPage: Int!, \$offset: Int!) {
     launches(find: {mission_name: \$searchQuery}, limit: \$missionsPerPage, sort: "launch_date_unix", offset:\$offset ) {
+      id
       details
       mission_name
-      ships {
-        name
-        image
-      }
-      id
     }
   }
   """;
@@ -30,10 +26,12 @@ class MissionsModel {
   // bool get loadMissionsInProgress => _loadMissionsSubscription != null;
 
   Future<List<Mission>> loadMissions(String query, int offset) async {
+    print("offset: $offset");
     cancelLoadMissions();
     var completer = Completer<List<Mission>>();
     var options = QueryOptions(
       document: gql(readMissions),
+      fetchPolicy: FetchPolicy.noCache,
       variables: {
         'searchQuery': query,
         'missionsPerPage': missionsPerPage,
@@ -42,7 +40,7 @@ class MissionsModel {
     ).asWatchQueryOptions();
     var observableQuery = graphQlClient.watchQuery(options);
     _loadMissionsSubscription = observableQuery.stream.listen((event) {
-      var data = event.data;
+      var data = observableQuery.latestResult?.data;
       if (data != null) {
         final List launchesRaw = data['launches'];
         final missions = List<Mission>.from(
